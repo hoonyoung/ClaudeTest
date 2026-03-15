@@ -163,46 +163,10 @@ def get_korean_stock_data(symbol: str, period: str = "3mo") -> dict:
 
 def resolve_company_to_symbol(company_name: str) -> dict:
     """Try to resolve a company name to a stock symbol."""
-    # Check if it's already a known ticker format
     name_upper = company_name.upper().strip()
+    name_lower = company_name.lower().strip()
 
-    # Try as US ticker directly
-    try:
-        ticker = yf.Ticker(name_upper)
-        info = ticker.info
-        if info and info.get("longName"):
-            return {
-                "symbol": name_upper,
-                "name": info["longName"],
-                "market": "US",
-                "found": True,
-            }
-    except Exception:
-        pass
-
-    # Try Korean market (6-digit number)
-    if company_name.strip().isdigit() and len(company_name.strip()) == 6:
-        krx_name = krx.get_market_ticker_name(company_name.strip())
-        if krx_name:
-            return {
-                "symbol": company_name.strip(),
-                "name": krx_name,
-                "market": "KR",
-                "found": True,
-            }
-
-    # Search Korean market by name
-    kr_symbol = search_korean_ticker_by_name(company_name)
-    if kr_symbol:
-        kr_name = krx.get_market_ticker_name(kr_symbol)
-        return {
-            "symbol": kr_symbol,
-            "name": kr_name,
-            "market": "KR",
-            "found": True,
-        }
-
-    # Well-known Korean companies mapping
+    # 1) Well-known Korean companies mapping (network 호출 없이 즉시 해결)
     KOREAN_COMPANIES = {
         "삼성전자": "005930",
         "삼성": "005930",
@@ -237,13 +201,56 @@ def resolve_company_to_symbol(company_name: str) -> dict:
         "doosan": "000150",
     }
 
-    name_lower = company_name.lower().strip()
     if name_lower in KOREAN_COMPANIES:
         kr_symbol = KOREAN_COMPANIES[name_lower]
-        kr_name = krx.get_market_ticker_name(kr_symbol)
+        try:
+            kr_name = krx.get_market_ticker_name(kr_symbol) or company_name
+        except Exception:
+            kr_name = company_name
         return {
             "symbol": kr_symbol,
-            "name": kr_name or company_name,
+            "name": kr_name,
+            "market": "KR",
+            "found": True,
+        }
+
+    # 2) 6자리 숫자 → 한국 주식 종목코드
+    if company_name.strip().isdigit() and len(company_name.strip()) == 6:
+        try:
+            krx_name = krx.get_market_ticker_name(company_name.strip()) or company_name.strip()
+        except Exception:
+            krx_name = company_name.strip()
+        return {
+            "symbol": company_name.strip(),
+            "name": krx_name,
+            "market": "KR",
+            "found": True,
+        }
+
+    # 3) 미국 티커 직접 조회
+    try:
+        ticker = yf.Ticker(name_upper)
+        info = ticker.info
+        if info and info.get("longName"):
+            return {
+                "symbol": name_upper,
+                "name": info["longName"],
+                "market": "US",
+                "found": True,
+            }
+    except Exception:
+        pass
+
+    # 4) pykrx 전체 검색 (느릴 수 있음)
+    kr_symbol = search_korean_ticker_by_name(company_name)
+    if kr_symbol:
+        try:
+            kr_name = krx.get_market_ticker_name(kr_symbol) or company_name
+        except Exception:
+            kr_name = company_name
+        return {
+            "symbol": kr_symbol,
+            "name": kr_name,
             "market": "KR",
             "found": True,
         }
