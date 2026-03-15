@@ -28,8 +28,20 @@ def get_client() -> anthropic.Anthropic:
     return anthropic.Anthropic(api_key=api_key)
 
 
+def _no_api_key_response(company_name: str, company_symbol: str) -> dict:
+    return {
+        "summary": f"**{company_name} ({company_symbol})**\n\nANTHROPIC_API_KEY가 설정되지 않아 AI 뉴스 분석을 제공할 수 없습니다.",
+        "news_items": [],
+        "company_name": company_name,
+        "company_symbol": company_symbol,
+        "note": "API 키 없음",
+    }
+
+
 def search_and_summarize_news(company_name: str, company_symbol: str, market: str) -> dict:
     """Use Claude with web search to find and summarize latest news about a company."""
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        return _no_api_key_response(company_name, company_symbol)
     client = get_client()
 
     market_label = "한국" if market == "KR" else "미국"
