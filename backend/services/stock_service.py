@@ -123,9 +123,22 @@ def get_korean_stock_data(symbol: str, period: str = "3mo") -> dict:
         # Remove exchange suffix for pykrx
         clean_symbol = symbol.replace(".KS", "").replace(".KQ", "")
 
-        df = krx.get_market_ohlcv_by_date(start_str, end_str, clean_symbol)
+        df = None
+        try:
+            df = krx.get_market_ohlcv_by_date(start_str, end_str, clean_symbol)
+        except Exception as krx_err:
+            logger.warning(f"pykrx failed for {clean_symbol}, trying yfinance fallback: {krx_err}")
 
         if df is None or df.empty:
+            # Fallback: yfinance with .KS suffix
+            try:
+                yfdata = get_us_stock_data(f"{clean_symbol}.KS", period)
+                if "error" not in yfdata:
+                    yfdata["market"] = "KR"
+                    yfdata["currency"] = "KRW"
+                    return yfdata
+            except Exception:
+                pass
             return {"error": f"No data found for Korean symbol: {symbol}"}
 
         company_name = krx.get_market_ticker_name(clean_symbol)
@@ -168,45 +181,41 @@ def resolve_company_to_symbol(company_name: str) -> dict:
 
     # 1) Well-known Korean companies mapping (network 호출 없이 즉시 해결)
     KOREAN_COMPANIES = {
-        "삼성전자": "005930",
-        "삼성": "005930",
-        "samsung electronics": "005930",
-        "sk하이닉스": "000660",
-        "sk hynix": "000660",
-        "현대차": "005380",
-        "현대자동차": "005380",
-        "hyundai": "005380",
-        "lg전자": "066570",
-        "lg electronics": "066570",
-        "카카오": "035720",
-        "kakao": "035720",
-        "naver": "035420",
-        "네이버": "035420",
-        "셀트리온": "068270",
-        "celtrion": "068270",
-        "삼성바이오로직스": "207940",
-        "포스코": "005490",
-        "posco": "005490",
-        "kb금융": "105560",
-        "신한지주": "055550",
-        "하나금융지주": "086790",
-        "lg화학": "051910",
-        "sk이노베이션": "096770",
-        "lotte": "004990",
-        "롯데": "004990",
-        "기아": "000270",
-        "기아차": "000270",
-        "kia": "000270",
-        "두산": "000150",
-        "doosan": "000150",
+        "삼성전자": ("005930", "삼성전자"),
+        "삼성": ("005930", "삼성전자"),
+        "samsung electronics": ("005930", "삼성전자"),
+        "sk하이닉스": ("000660", "SK하이닉스"),
+        "sk hynix": ("000660", "SK하이닉스"),
+        "현대차": ("005380", "현대자동차"),
+        "현대자동차": ("005380", "현대자동차"),
+        "hyundai": ("005380", "현대자동차"),
+        "lg전자": ("066570", "LG전자"),
+        "lg electronics": ("066570", "LG전자"),
+        "카카오": ("035720", "카카오"),
+        "kakao": ("035720", "카카오"),
+        "naver": ("035420", "NAVER"),
+        "네이버": ("035420", "NAVER"),
+        "셀트리온": ("068270", "셀트리온"),
+        "celtrion": ("068270", "셀트리온"),
+        "삼성바이오로직스": ("207940", "삼성바이오로직스"),
+        "포스코": ("005490", "POSCO홀딩스"),
+        "posco": ("005490", "POSCO홀딩스"),
+        "kb금융": ("105560", "KB금융"),
+        "신한지주": ("055550", "신한지주"),
+        "하나금융지주": ("086790", "하나금융지주"),
+        "lg화학": ("051910", "LG화학"),
+        "sk이노베이션": ("096770", "SK이노베이션"),
+        "lotte": ("004990", "롯데지주"),
+        "롯데": ("004990", "롯데지주"),
+        "기아": ("000270", "기아"),
+        "기아차": ("000270", "기아"),
+        "kia": ("000270", "기아"),
+        "두산": ("000150", "두산"),
+        "doosan": ("000150", "두산"),
     }
 
     if name_lower in KOREAN_COMPANIES:
-        kr_symbol = KOREAN_COMPANIES[name_lower]
-        try:
-            kr_name = krx.get_market_ticker_name(kr_symbol) or company_name
-        except Exception:
-            kr_name = company_name
+        kr_symbol, kr_name = KOREAN_COMPANIES[name_lower]
         return {
             "symbol": kr_symbol,
             "name": kr_name,
