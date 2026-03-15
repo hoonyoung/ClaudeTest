@@ -31,12 +31,13 @@ export interface StockData {
 
 export interface NewsItem {
   title?: string
-  content?: string
+  link?: string
+  date?: string
+  source?: string
   sentiment?: '긍정' | '부정' | '중립'
 }
 
 export interface NewsData {
-  summary: string
   news_items: NewsItem[]
   company_name: string
   company_symbol: string

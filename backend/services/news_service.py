@@ -52,7 +52,6 @@ def get_news_articles(company_name: str, company_symbol: str, market: str) -> di
     articles = articles[:10]
 
     return {
-        "summary": _format_summary(articles, company_name),
         "news_items": articles,
         "company_name": company_name,
         "company_symbol": company_symbol,
@@ -65,8 +64,7 @@ def _get_naver_finance_news(ticker: str) -> list:
     url = f"https://finance.naver.com/item/news_news.nhn?code={ticker}&page=1"
     try:
         resp = requests.get(url, headers=HEADERS, timeout=8)
-        resp.encoding = "euc-kr"
-        soup = BeautifulSoup(resp.text, "lxml")
+        soup = BeautifulSoup(resp.content, "lxml")
 
         articles = []
         for row in soup.select("table.type5 tr"):
@@ -84,12 +82,10 @@ def _get_naver_finance_news(ticker: str) -> list:
             link = f"https://finance.naver.com{href}" if href.startswith("/") else href
             date = date_td.get_text(strip=True) if date_td else ""
             source = source_td.get_text(strip=True) if source_td else "네이버금융"
-            summary = _fetch_article_summary(link)
 
             articles.append({
                 "title": title,
                 "link": link,
-                "summary": summary,
                 "date": date,
                 "source": source,
                 "sentiment": "중립",
@@ -134,15 +130,10 @@ def _get_google_news_rss(query: str, lang: str = "ko") -> list:
             link = link_tag.get_text(strip=True) if link_tag else ""
             date = _parse_date(pub_tag.get_text(strip=True) if pub_tag else "")
             source = source_tag.get_text(strip=True) if source_tag else "Google News"
-            summary = _fetch_article_summary(link) if link else ""
-            # Translate summary to Korean if needed
-            if summary:
-                summary = _translate_to_korean(summary)
 
             articles.append({
                 "title": title,
                 "link": link,
-                "summary": summary,
                 "date": date,
                 "source": source,
                 "sentiment": "중립",
@@ -155,81 +146,6 @@ def _get_google_news_rss(query: str, lang: str = "ko") -> list:
         logger.warning(f"Google News RSS error: {e}")
         return []
 
-
-def _fetch_article_summary(url: str) -> str:
-    """Fetch article summary using meta description tags (most reliable)."""
-    try:
-        resp = requests.get(url, headers=HEADERS, timeout=6, allow_redirects=True)
-        if "naver.com" in resp.url or "naver.com" in url:
-            resp.encoding = resp.apparent_encoding or "utf-8"
-        soup = BeautifulSoup(resp.text, "lxml")
-
-        # 1. og:description (most articles have this - clean 2-3 sentence summary)
-        og_desc = soup.find("meta", property="og:description")
-        if og_desc and og_desc.get("content", "").strip():
-            return _clean_summary(og_desc["content"])
-
-        # 2. meta description
-        meta_desc = soup.find("meta", attrs={"name": "description"})
-        if meta_desc and meta_desc.get("content", "").strip():
-            return _clean_summary(meta_desc["content"])
-
-        # 3. Fallback: first paragraph from article body
-        for tag in soup(["script", "style", "nav", "footer", "header", "aside"]):
-            tag.decompose()
-        body = (
-            soup.select_one("#newsct_article")    # Naver news
-            or soup.select_one("#articleBodyContents")
-            or soup.select_one("article")
-            or soup.select_one(".article-body")
-        )
-        if body:
-            paragraphs = [p.get_text(strip=True) for p in body.find_all("p") if len(p.get_text(strip=True)) > 30]
-            if paragraphs:
-                return _clean_summary(" ".join(paragraphs[:3]))
-
-        return ""
-    except Exception:
-        return ""
-
-
-def _clean_summary(text: str, max_chars: int = 200) -> str:
-    """Clean and trim summary text to 2-3 lines."""
-    text = re.sub(r"\s+", " ", text).strip()
-    if len(text) <= max_chars:
-        return text
-    # Cut at sentence boundary
-    cut = text[:max_chars]
-    for sep in (". ", "다. ", "요. ", "음. "):
-        idx = cut.rfind(sep)
-        if idx > max_chars // 2:
-            return cut[:idx + len(sep)].strip()
-    return cut.strip() + "..."
-
-
-def _format_summary(articles: list, company_name: str) -> str:
-    """Format articles list into a readable markdown summary."""
-    if not articles:
-        return f"**{company_name}** 관련 최신 뉴스를 가져오지 못했습니다."
-
-    lines = [f"## {company_name} 최신 뉴스\n"]
-    for i, a in enumerate(articles, 1):
-        title = a.get("title", "")
-        summary = a.get("summary", "")
-        source = a.get("source", "")
-        date = a.get("date", "")
-        link = a.get("link", "")
-
-        lines.append(f"**{i}. {title}**")
-        if source or date:
-            lines.append(f"*{source}{'  ' + date if date else ''}*")
-        if summary:
-            lines.append(summary)
-        if link:
-            lines.append(f"[기사 보기]({link})")
-        lines.append("")
-
-    return "\n".join(lines)
 
 
 def _parse_date(raw: str) -> str:
