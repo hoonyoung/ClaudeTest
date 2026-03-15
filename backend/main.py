@@ -8,7 +8,7 @@ import os
 from dotenv import load_dotenv
 
 from services.stock_service import get_stock_data, resolve_company_to_symbol
-from services.claude_service import search_and_summarize_news
+from services.news_service import get_news_articles
 
 load_dotenv()
 
@@ -71,8 +71,7 @@ async def search_company(
                 detail=f"주식 데이터를 찾을 수 없습니다: {stock_data['error']}"
             )
 
-        # Get news and AI summary (run concurrently would be ideal, but keeping it simple)
-        news_data = search_and_summarize_news(
+        news_data = get_news_articles(
             company_name=stock_data.get("name", company_name),
             company_symbol=symbol,
             market=market,
@@ -118,7 +117,7 @@ async def get_news(
     """Get AI-summarized news for a specific symbol."""
     try:
         name = company_name or symbol
-        data = search_and_summarize_news(
+        data = get_news_articles(
             company_name=name,
             company_symbol=symbol,
             market=market,
