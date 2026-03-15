@@ -141,7 +141,10 @@ def get_korean_stock_data(symbol: str, period: str = "3mo") -> dict:
                 pass
             return {"error": f"No data found for Korean symbol: {symbol}"}
 
-        company_name = krx.get_market_ticker_name(clean_symbol)
+        try:
+            company_name = krx.get_market_ticker_name(clean_symbol)
+        except Exception:
+            company_name = clean_symbol
 
         prices = []
         for date, row in df.iterrows():
