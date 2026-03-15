@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 
 from services.stock_service import get_stock_data, resolve_company_to_symbol
 from services.news_service import get_news_articles
+from services.comments_service import get_investor_comments
 
 load_dotenv()
 
@@ -122,6 +123,20 @@ async def get_news(
             company_symbol=symbol,
             market=market,
         )
+        return data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/comments/{symbol}")
+async def get_comments(
+    symbol: str,
+    market: str = Query("US"),
+    limit: int = Query(100, ge=10, le=100),
+):
+    """Get investor comments and sentiment for a stock."""
+    try:
+        data = get_investor_comments(symbol=symbol, market=market, limit=limit)
         return data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
