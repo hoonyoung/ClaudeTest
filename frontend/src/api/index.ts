@@ -63,3 +63,40 @@ export async function getStockData(symbol: string, period: string = '3mo'): Prom
   })
   return response.data
 }
+
+export interface Comment {
+  id: string
+  author: string
+  content: string
+  date: string
+  likes: number
+  dislikes: number
+  views: number
+  sentiment: '긍정' | '부정' | '중립'
+  source: string
+}
+
+export interface SentimentSummary {
+  bullish: number
+  bearish: number
+  neutral: number
+  bullish_pct: number
+  bearish_pct: number
+  neutral_pct: number
+  total: number
+}
+
+export interface CommentsData {
+  comments: Comment[]
+  total: number
+  sentiment_summary: SentimentSummary
+  symbol: string
+  market: string
+}
+
+export async function getComments(symbol: string, market: string): Promise<CommentsData> {
+  const response = await api.get<CommentsData>(`/comments/${symbol}`, {
+    params: { market },
+  })
+  return response.data
+}

@@ -4,7 +4,8 @@ import SearchBar from './components/SearchBar'
 import StockInfo from './components/StockInfo'
 import StockChart from './components/StockChart'
 import NewsSection from './components/NewsSection'
-import { searchCompany, getStockData, SearchResult } from './api'
+import CommentsSection from './components/CommentsSection'
+import { searchCompany, getStockData, getComments, SearchResult, CommentsData } from './api'
 
 export default function App() {
   const [result, setResult] = useState<SearchResult | null>(null)
@@ -12,15 +13,25 @@ export default function App() {
   const [isUpdatingChart, setIsUpdatingChart] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [currentPeriod, setCurrentPeriod] = useState('3mo')
+  const [comments, setComments] = useState<CommentsData | null>(null)
+  const [isLoadingComments, setIsLoadingComments] = useState(false)
 
   const handleSearch = useCallback(async (query: string, period: string) => {
     setIsLoading(true)
     setError(null)
     setCurrentPeriod(period)
+    setComments(null)
 
     try {
       const data = await searchCompany(query, period)
       setResult(data)
+
+      // 댓글은 별도로 비동기 로드
+      setIsLoadingComments(true)
+      getComments(data.resolved_symbol, data.stock.market)
+        .then(setComments)
+        .catch(() => setComments(null))
+        .finally(() => setIsLoadingComments(false))
     } catch (err) {
       const message = err instanceof Error ? err.message : '검색 중 오류가 발생했습니다'
       if (message.includes('404')) {
@@ -117,6 +128,9 @@ export default function App() {
 
             {/* News */}
             <NewsSection data={result.news} />
+
+            {/* Comments */}
+            <CommentsSection data={comments} isLoading={isLoadingComments} />
           </div>
         )}
 
