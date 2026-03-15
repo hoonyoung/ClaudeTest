@@ -45,7 +45,7 @@ def search_korean_ticker_by_name(company_name: str) -> Optional[str]:
     return None
 
 
-def get_stock_data(symbol: str, period: str = "3mo") -> dict:
+def get_stock_data(symbol: str, period: str = "3mo", company_name: str = "") -> dict:
     """Fetch stock data for a given symbol."""
     # Detect if Korean stock
     is_korean = symbol.endswith(".KS") or symbol.endswith(".KQ") or (
@@ -53,7 +53,7 @@ def get_stock_data(symbol: str, period: str = "3mo") -> dict:
     )
 
     if is_korean:
-        return get_korean_stock_data(symbol, period)
+        return get_korean_stock_data(symbol, period, company_name=company_name)
     else:
         return get_us_stock_data(symbol, period)
 
@@ -103,7 +103,7 @@ def get_us_stock_data(symbol: str, period: str = "3mo") -> dict:
         return {"error": str(e)}
 
 
-def get_korean_stock_data(symbol: str, period: str = "3mo") -> dict:
+def get_korean_stock_data(symbol: str, period: str = "3mo", company_name: str = "") -> dict:
     """Fetch Korean stock data using pykrx."""
     try:
         end_date = datetime.today()
@@ -141,10 +141,11 @@ def get_korean_stock_data(symbol: str, period: str = "3mo") -> dict:
                 pass
             return {"error": f"No data found for Korean symbol: {symbol}"}
 
-        try:
-            company_name = krx.get_market_ticker_name(clean_symbol)
-        except Exception:
-            company_name = clean_symbol
+        if not company_name:
+            try:
+                company_name = krx.get_market_ticker_name(clean_symbol)
+            except Exception:
+                company_name = clean_symbol
 
         prices = []
         for date, row in df.iterrows():

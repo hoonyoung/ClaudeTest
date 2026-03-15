@@ -93,8 +93,8 @@ async def search_company(
 
         logger.info(f"Resolved to: {symbol} ({company_name}) on {market}")
 
-        # Get stock price data
-        stock_data = get_stock_data(symbol, period)
+        # Get stock price data (pass resolved name to avoid redundant KRX lookup)
+        stock_data = get_stock_data(symbol, period, company_name=company_name)
 
         if "error" in stock_data:
             raise HTTPException(
