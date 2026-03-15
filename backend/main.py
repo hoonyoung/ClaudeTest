@@ -4,8 +4,38 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Optional
 import logging
+import math
 import os
 from dotenv import load_dotenv
+
+
+def _sanitize(obj):
+    """Recursively convert non-JSON-serializable objects (DataFrame, numpy types, NaN, etc.)."""
+    try:
+        import pandas as pd
+        if isinstance(obj, pd.DataFrame):
+            return obj.to_dict(orient="records")
+        if isinstance(obj, pd.Series):
+            return obj.tolist()
+    except ImportError:
+        pass
+    try:
+        import numpy as np
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return None if math.isnan(float(obj)) else float(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+    except ImportError:
+        pass
+    if isinstance(obj, float) and math.isnan(obj):
+        return None
+    if isinstance(obj, dict):
+        return {k: _sanitize(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_sanitize(i) for i in obj]
+    return obj
 
 from services.stock_service import get_stock_data, resolve_company_to_symbol
 from services.news_service import get_news_articles
@@ -78,12 +108,12 @@ async def search_company(
             market=market,
         )
 
-        return JSONResponse(content={
+        return JSONResponse(content=_sanitize({
             "stock": stock_data,
             "news": news_data,
             "query": q,
             "resolved_symbol": symbol,
-        })
+        }))
 
     except HTTPException:
         raise
@@ -102,7 +132,7 @@ async def get_stock(
         data = get_stock_data(symbol, period)
         if "error" in data:
             raise HTTPException(status_code=404, detail=data["error"])
-        return data
+        return JSONResponse(content=_sanitize(data))
     except HTTPException:
         raise
     except Exception as e:
@@ -137,7 +167,7 @@ async def get_comments(
     """Get investor comments and sentiment for a stock."""
     try:
         data = get_investor_comments(symbol=symbol, market=market, limit=limit)
-        return data
+        return JSONResponse(content=_sanitize(data))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
