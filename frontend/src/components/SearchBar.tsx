@@ -1,4 +1,4 @@
-import { useState, FormEvent } from 'react'
+import { useState, useRef, FormEvent } from 'react'
 import { Search, TrendingUp } from 'lucide-react'
 
 interface SearchBarProps {
@@ -27,9 +27,11 @@ const PERIODS = [
 export default function SearchBar({ onSearch, isLoading }: SearchBarProps) {
   const [query, setQuery] = useState('')
   const [period, setPeriod] = useState('3mo')
+  const isComposingRef = useRef(false)
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault()
+    if (isComposingRef.current) return
     if (query.trim()) {
       onSearch(query.trim(), period)
     }
@@ -44,6 +46,11 @@ export default function SearchBar({ onSearch, isLoading }: SearchBarProps) {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            onCompositionStart={() => { isComposingRef.current = true }}
+            onCompositionEnd={(e) => {
+              isComposingRef.current = false
+              setQuery((e.target as HTMLInputElement).value)
+            }}
             placeholder="회사명 또는 종목코드 입력 (예: 삼성전자, AAPL, 005930)"
             className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
             disabled={isLoading}
