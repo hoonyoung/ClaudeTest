@@ -91,20 +91,22 @@ def search_and_summarize_news(company_name: str, company_symbol: str, market: st
 
     except (anthropic.BadRequestError, anthropic.APIStatusError) as e:
         error_str = str(e)
-        if "credit balance is too low" in error_str or "insufficient" in error_str.lower():
-            logger.warning(f"Anthropic API credit insufficient, falling back to web crawl: {e}")
+        # Fall back to web crawling for any auth/credit issue
+        if (
+            isinstance(e, anthropic.AuthenticationError)
+            or "credit balance is too low" in error_str
+            or "insufficient" in error_str.lower()
+            or "401" in error_str
+        ):
+            logger.warning(f"Claude API unavailable ({type(e).__name__}), falling back to web crawl")
             from services.news_service import get_news_articles
             return get_news_articles(company_name, company_symbol, market)
         logger.warning(f"Web search not available, falling back to knowledge: {e}")
         return get_news_from_knowledge(client, company_name, company_symbol, market)
     except Exception as e:
-        logger.error(f"Claude API error: {e}", exc_info=True)
-        return {
-            "summary": f"{company_name}에 대한 뉴스를 가져오는 중 오류가 발생했습니다: {str(e)}",
-            "news_items": [],
-            "company_name": company_name,
-            "company_symbol": company_symbol,
-        }
+        logger.warning(f"Claude API error, falling back to web crawl: {e}")
+        from services.news_service import get_news_articles
+        return get_news_articles(company_name, company_symbol, market)
 
 
 def get_news_from_knowledge(
@@ -150,24 +152,14 @@ def get_news_from_knowledge(
             "note": "실시간 검색 불가 - 학습 데이터 기반 분석",
         }
     except (anthropic.BadRequestError, anthropic.APIStatusError) as e:
-        if "credit balance is too low" in str(e) or "insufficient" in str(e).lower():
-            logger.warning(f"Anthropic API credit insufficient: {e}")
-            return _credit_exhausted_response(company_name, company_symbol)
-        logger.error(f"get_news_from_knowledge error: {e}", exc_info=True)
-        return {
-            "summary": f"{company_name} 분석 중 오류가 발생했습니다: {str(e)}",
-            "news_items": [],
-            "company_name": company_name,
-            "company_symbol": company_symbol,
-        }
+        logger.warning(f"get_news_from_knowledge API error, falling back to web crawl: {e}")
+        from services.news_service import get_news_articles
+        return get_news_articles(company_name, company_symbol, market)
     except Exception as e:
-        logger.error(f"get_news_from_knowledge error: {e}", exc_info=True)
-        return {
-            "summary": f"{company_name} 분석 중 오류가 발생했습니다: {str(e)}",
-            "news_items": [],
-            "company_name": company_name,
-            "company_symbol": company_symbol,
-        }
+        logger.warning(f"get_news_from_knowledge error, falling back to web crawl: {e}")
+        from services.news_service import get_news_articles
+        return get_news_articles(company_name, company_symbol, market)
+
 
 
 def parse_news_items(text: str) -> list:
