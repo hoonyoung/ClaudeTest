@@ -48,7 +48,7 @@ def get_investor_comments(symbol: str, market: str, limit: int = 100) -> dict:
     }
 
 
-def _get_naver_board_comments(ticker: str, limit: int = 100) -> list:
+def _get_naver_board_comments(ticker: str, limit: int = 100, max_pages: int = 5) -> list:
     """Scrape Naver Finance stock discussion board."""
     comments = []
     page = 1
@@ -103,8 +103,8 @@ def _get_naver_board_comments(ticker: str, limit: int = 100) -> list:
             if found_in_page == 0:
                 break  # No more pages
             page += 1
-            if page > 5:
-                break  # Max 5 pages
+            if page > max_pages:
+                break
 
         except Exception as e:
             logger.warning(f"Naver board scrape error page {page}: {e}")
@@ -282,26 +282,34 @@ def get_weekly_sentiment(symbol: str, market: str, daily_limit: int = 500) -> di
     today = datetime.now().date()
     week_dates = [(today - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(6, -1, -1)]
 
-    # Fetch a large pool of recent comments (up to daily_limit * 7)
-    pool_limit = daily_limit * 7
+    # Fetch a large pool of recent comments.
+    # KR: ~15 posts/page, 50 pages ≈ 750 posts (covers ~7 days for active stocks)
+    pool_limit = min(daily_limit * 7, 1000)
     if market == "KR":
-        raw = _get_naver_board_comments(symbol, limit=pool_limit)
+        raw = _get_naver_board_comments(symbol, limit=pool_limit, max_pages=50)
     else:
         raw = _get_stocktwits_comments(symbol, limit=pool_limit)
         if len(raw) < pool_limit // 2:
             raw += _get_reddit_comments(symbol, limit=pool_limit - len(raw))
 
-    # Normalize Naver date format "YYYY.MM.DD HH:MM" → "YYYY-MM-DD"
+    # Naver date formats encountered in practice:
+    #   "2025.03.15 14:30"  – full datetime (most common for older posts)
+    #   "2025.03.15"        – date only
+    #   "03.15"             – month.day without year (same year assumed)
+    #   "14:30"             – time only → today's post
     def _normalize_date(d: str) -> str:
         d = d.strip()
-        # "YYYY.MM.DD HH:MM" or "YYYY.MM.DD"
+        # "YYYY.MM.DD ..." or "YYYY.MM.DD"
         m = re.match(r"(\d{4})[.\-/](\d{2})[.\-/](\d{2})", d)
         if m:
             return f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
-        # "MM.DD HH:MM" → assume current year
-        m2 = re.match(r"(\d{2})[.\-/](\d{2})\s", d)
+        # "MM.DD" with or without trailing time/space
+        m2 = re.match(r"^(\d{1,2})[.\-/](\d{2})", d)
         if m2:
-            return f"{today.year}-{m2.group(1)}-{m2.group(2)}"
+            return f"{today.year}-{m2.group(1).zfill(2)}-{m2.group(2)}"
+        # "HH:MM" – time only means the post is from today
+        if re.match(r"^\d{1,2}:\d{2}$", d):
+            return str(today)
         return d[:10]
 
     # Group by date, cap at daily_limit per day
