@@ -101,3 +101,33 @@ export async function getComments(symbol: string, market: string): Promise<Comme
   })
   return response.data
 }
+
+export interface WeeklyDay {
+  date: string
+  total: number
+  bullish: number
+  bearish: number
+  neutral: number
+  bullish_pct: number
+  bearish_pct: number
+  neutral_pct: number
+  sentiment_score: number
+}
+
+export interface WeeklySentimentData {
+  symbol: string
+  market: string
+  days: WeeklyDay[]
+  daily_limit: number
+}
+
+export async function getWeeklySentiment(
+  symbol: string,
+  market: string,
+  dailyLimit: number = 500,
+): Promise<WeeklySentimentData> {
+  const response = await api.get<WeeklySentimentData>(`/comments/${symbol}/weekly`, {
+    params: { market, daily_limit: dailyLimit },
+  })
+  return response.data
+}

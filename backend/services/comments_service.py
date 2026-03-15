@@ -4,7 +4,8 @@ from bs4 import BeautifulSoup
 import logging
 import re
 import urllib.parse
-from datetime import datetime
+from datetime import datetime, timedelta
+from collections import defaultdict
 
 logger = logging.getLogger(__name__)
 
@@ -270,3 +271,88 @@ def _safe_int(value: str) -> int:
         return int(re.sub(r"[^\d]", "", str(value)) or 0)
     except Exception:
         return 0
+
+
+def get_weekly_sentiment(symbol: str, market: str, daily_limit: int = 500) -> dict:
+    """Fetch comments for the last 7 days and return daily sentiment breakdown.
+
+    daily_limit: max comments per day to analyze (100–500).
+    """
+    daily_limit = max(100, min(500, daily_limit))
+    today = datetime.now().date()
+    week_dates = [(today - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(6, -1, -1)]
+
+    # Fetch a large pool of recent comments (up to daily_limit * 7)
+    pool_limit = daily_limit * 7
+    if market == "KR":
+        raw = _get_naver_board_comments(symbol, limit=pool_limit)
+    else:
+        raw = _get_stocktwits_comments(symbol, limit=pool_limit)
+        if len(raw) < pool_limit // 2:
+            raw += _get_reddit_comments(symbol, limit=pool_limit - len(raw))
+
+    # Normalize Naver date format "YYYY.MM.DD HH:MM" → "YYYY-MM-DD"
+    def _normalize_date(d: str) -> str:
+        d = d.strip()
+        # "YYYY.MM.DD HH:MM" or "YYYY.MM.DD"
+        m = re.match(r"(\d{4})[.\-/](\d{2})[.\-/](\d{2})", d)
+        if m:
+            return f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
+        # "MM.DD HH:MM" → assume current year
+        m2 = re.match(r"(\d{2})[.\-/](\d{2})\s", d)
+        if m2:
+            return f"{today.year}-{m2.group(1)}-{m2.group(2)}"
+        return d[:10]
+
+    # Group by date, cap at daily_limit per day
+    by_date: dict[str, list] = defaultdict(list)
+    for c in raw:
+        d = _normalize_date(c.get("date", ""))
+        if d in week_dates and len(by_date[d]) < daily_limit:
+            by_date[d].append(c)
+
+    # Build per-day result
+    days = []
+    for date_str in week_dates:
+        day_comments = by_date.get(date_str, [])
+        total = len(day_comments)
+        if total == 0:
+            days.append({
+                "date": date_str,
+                "total": 0,
+                "bullish": 0,
+                "bearish": 0,
+                "neutral": 0,
+                "bullish_pct": 0,
+                "bearish_pct": 0,
+                "neutral_pct": 0,
+                "sentiment_score": 0,
+            })
+            continue
+        counts = {"긍정": 0, "부정": 0, "중립": 0}
+        for c in day_comments:
+            s = c.get("sentiment", "중립")
+            counts[s] = counts.get(s, 0) + 1
+        bullish_pct = round(counts["긍정"] / total * 100)
+        bearish_pct = round(counts["부정"] / total * 100)
+        neutral_pct = 100 - bullish_pct - bearish_pct
+        # sentiment_score: bullish - bearish, range -100 ~ +100
+        sentiment_score = bullish_pct - bearish_pct
+        days.append({
+            "date": date_str,
+            "total": total,
+            "bullish": counts["긍정"],
+            "bearish": counts["부정"],
+            "neutral": counts["중립"],
+            "bullish_pct": bullish_pct,
+            "bearish_pct": bearish_pct,
+            "neutral_pct": neutral_pct,
+            "sentiment_score": sentiment_score,
+        })
+
+    return {
+        "symbol": symbol,
+        "market": market,
+        "days": days,
+        "daily_limit": daily_limit,
+    }

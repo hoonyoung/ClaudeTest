@@ -39,7 +39,7 @@ def _sanitize(obj):
 
 from services.stock_service import get_stock_data, resolve_company_to_symbol
 from services.news_service import get_news_articles
-from services.comments_service import get_investor_comments
+from services.comments_service import get_investor_comments, get_weekly_sentiment
 
 load_dotenv()
 
@@ -167,6 +167,20 @@ async def get_comments(
     """Get investor comments and sentiment for a stock."""
     try:
         data = get_investor_comments(symbol=symbol, market=market, limit=limit)
+        return JSONResponse(content=_sanitize(data))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/comments/{symbol}/weekly")
+async def get_weekly_comments_sentiment(
+    symbol: str,
+    market: str = Query("US"),
+    daily_limit: int = Query(500, ge=100, le=500),
+):
+    """Get daily sentiment trend for the last 7 days."""
+    try:
+        data = get_weekly_sentiment(symbol=symbol, market=market, daily_limit=daily_limit)
         return JSONResponse(content=_sanitize(data))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
