@@ -44,7 +44,6 @@ def search_and_summarize_news(company_name: str, company_symbol: str, market: st
         with client.messages.stream(
             model="claude-opus-4-6",
             max_tokens=4096,
-            thinking={"type": "adaptive"},
             tools=[
                 {
                     "type": "web_search_20260209",
@@ -71,11 +70,11 @@ def search_and_summarize_news(company_name: str, company_symbol: str, market: st
             "company_symbol": company_symbol,
         }
 
-    except anthropic.BadRequestError as e:
+    except (anthropic.BadRequestError, anthropic.APIStatusError) as e:
         logger.warning(f"Web search not available, falling back to knowledge: {e}")
         return get_news_from_knowledge(client, company_name, company_symbol, market)
     except Exception as e:
-        logger.error(f"Claude API error: {e}")
+        logger.error(f"Claude API error: {e}", exc_info=True)
         return {
             "summary": f"{company_name}에 대한 뉴스를 가져오는 중 오류가 발생했습니다: {str(e)}",
             "news_items": [],
@@ -127,8 +126,9 @@ def get_news_from_knowledge(
             "note": "실시간 검색 불가 - 학습 데이터 기반 분석",
         }
     except Exception as e:
+        logger.error(f"get_news_from_knowledge error: {e}", exc_info=True)
         return {
-            "summary": f"{company_name} 분석 중 오류가 발생했습니다.",
+            "summary": f"{company_name} 분석 중 오류가 발생했습니다: {str(e)}",
             "news_items": [],
             "company_name": company_name,
             "company_symbol": company_symbol,
