@@ -55,8 +55,7 @@ def _get_naver_board_comments(ticker: str, limit: int = 100) -> list:
         url = f"https://finance.naver.com/item/board.nhn?code={ticker}&page={page}"
         try:
             resp = requests.get(url, headers=HEADERS, timeout=8)
-            resp.encoding = "euc-kr"
-            soup = BeautifulSoup(resp.text, "lxml")
+            soup = BeautifulSoup(resp.content, "lxml")
 
             rows = soup.select("table.type2 tr")
             found_in_page = 0
