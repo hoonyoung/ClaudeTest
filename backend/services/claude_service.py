@@ -6,6 +6,21 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 
+def _credit_exhausted_response(company_name: str, company_symbol: str) -> dict:
+    return {
+        "summary": (
+            f"**{company_name} ({company_symbol}) 기업 정보**\n\n"
+            "⚠️ Anthropic API 크레딧이 부족하여 AI 분석을 제공할 수 없습니다.\n\n"
+            "[https://console.anthropic.com](https://console.anthropic.com) 에서 크레딧을 충전하면 "
+            "최신 뉴스 검색 및 기업 분석 기능을 이용하실 수 있습니다."
+        ),
+        "news_items": [],
+        "company_name": company_name,
+        "company_symbol": company_symbol,
+        "note": "API 크레딧 부족",
+    }
+
+
 def get_client() -> anthropic.Anthropic:
     api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
@@ -71,6 +86,10 @@ def search_and_summarize_news(company_name: str, company_symbol: str, market: st
         }
 
     except (anthropic.BadRequestError, anthropic.APIStatusError) as e:
+        error_str = str(e)
+        if "credit balance is too low" in error_str or "insufficient" in error_str.lower():
+            logger.warning(f"Anthropic API credit insufficient: {e}")
+            return _credit_exhausted_response(company_name, company_symbol)
         logger.warning(f"Web search not available, falling back to knowledge: {e}")
         return get_news_from_knowledge(client, company_name, company_symbol, market)
     except Exception as e:
@@ -124,6 +143,17 @@ def get_news_from_knowledge(
             "company_name": company_name,
             "company_symbol": company_symbol,
             "note": "실시간 검색 불가 - 학습 데이터 기반 분석",
+        }
+    except (anthropic.BadRequestError, anthropic.APIStatusError) as e:
+        if "credit balance is too low" in str(e) or "insufficient" in str(e).lower():
+            logger.warning(f"Anthropic API credit insufficient: {e}")
+            return _credit_exhausted_response(company_name, company_symbol)
+        logger.error(f"get_news_from_knowledge error: {e}", exc_info=True)
+        return {
+            "summary": f"{company_name} 분석 중 오류가 발생했습니다: {str(e)}",
+            "news_items": [],
+            "company_name": company_name,
+            "company_symbol": company_symbol,
         }
     except Exception as e:
         logger.error(f"get_news_from_knowledge error: {e}", exc_info=True)
