@@ -32,7 +32,7 @@ def handle_file(conn, filename, filesize):
         conn.sendall(f"OK:{filename} 저장 완료 ({filesize} bytes)".encode("utf-8"))
     else:
         print(f"[파일 오류] {filename}: {received}/{filesize} bytes 수신")
-        conn.sendall(b"ERROR:전송 불완전")
+        conn.sendall("ERROR:전송 불완전".encode("utf-8"))
 
 
 def handle_client(conn, addr):
