@@ -104,12 +104,20 @@ def resolve_collision(p1: Particle, p2: Particle) -> bool:
     nx = dx / dist
     ny = dy / dist
 
+    # ── 위치 보정을 속도 체크 전에 항상 실행 ──────────────────
+    # 겹친 만큼 두 파티클을 각각 절반씩 밀어냄 (강체 조건 보장)
+    overlap = min_dist - dist + 0.2   # 0.2px 여유로 부동소수점 재겹침 방지
+    p1.x -= overlap * 0.5 * nx
+    p1.y -= overlap * 0.5 * ny
+    p2.x += overlap * 0.5 * nx
+    p2.y += overlap * 0.5 * ny
+
     # 법선 방향 상대속도
     dvx = p1.vx - p2.vx
     dvy = p1.vy - p2.vy
     dot = dvx * nx + dvy * ny
 
-    # 이미 멀어지는 중이면 처리하지 않음
+    # 이미 멀어지는 중이면 위치만 보정하고 종료
     if dot >= 0:
         return False
 
@@ -119,13 +127,6 @@ def resolve_collision(p1: Particle, p2: Particle) -> bool:
     p1.vy += j * ny
     p2.vx -= j * nx
     p2.vy -= j * ny
-
-    # 겹침 보정
-    overlap = min_dist - dist
-    p1.x -= overlap * 0.5 * nx
-    p1.y -= overlap * 0.5 * ny
-    p2.x += overlap * 0.5 * nx
-    p2.y += overlap * 0.5 * ny
 
     return True
 
@@ -229,10 +230,14 @@ def main():
         for p in particles:
             p.update()
 
-        for i in range(len(particles)):
-            for j in range(i + 1, len(particles)):
-                if resolve_collision(particles[i], particles[j]):
-                    collision_count += 1
+        # 여러 파티클이 동시에 충돌할 때 완전히 분리되도록 다중 패스 실행
+        PASSES = 5
+        for pass_idx in range(PASSES):
+            for i in range(len(particles)):
+                for j in range(i + 1, len(particles)):
+                    collided = resolve_collision(particles[i], particles[j])
+                    if collided and pass_idx == 0:
+                        collision_count += 1
 
         # ── 렌더링 ────────────────────────────────────────────
         screen.fill(BG_COLOR)
